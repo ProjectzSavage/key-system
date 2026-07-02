@@ -1,0 +1,34 @@
+-- Services & Modules
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage.Modules.Config)
+
+-- Variables
+local TotalCharacters = #Config.Keys
+local Randomizer = Random.new()
+
+-- Functions
+local function CreateZone(ZoneNumber: number)
+	local zone = workspace.Zones:FindFirstChild(tostring(ZoneNumber))
+	if not zone then return end
+
+	local zoneData = Config.Zones[ZoneNumber]
+	if not zoneData then return end
+
+	for _, key in zone:GetDescendants() do
+		if not key:IsA("BasePart") then continue end
+
+		local surfaceGui = key:FindFirstChildOfClass("SurfaceGui")
+		local textLabel = surfaceGui and surfaceGui:FindFirstChildOfClass("TextLabel")
+
+		if textLabel then
+			textLabel.Text = Config.Keys[Randomizer:NextInteger(1, TotalCharacters)]
+		end
+
+		key.Color = zoneData.Colors[Randomizer:NextInteger(1, #zoneData.Colors)]
+	end
+end
+
+-- Initialization
+for i in pairs(Config.Zones) do
+	CreateZone(i)
+end

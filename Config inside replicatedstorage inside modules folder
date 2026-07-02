@@ -1,0 +1,161 @@
+-- Services & Modules
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local SoundService = game:GetService("SoundService")
+local TweenService = game:GetService("TweenService")
+
+local Config = require(ReplicatedStorage.Modules.Config)
+
+-- Variables
+local Character = script.Parent
+local TweenDownInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local TweenUpInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+local LoweredParts = {}
+local ActiveTweens = {}
+
+-- Sounds
+local function CreateZoneSounds()
+	for zone, data in pairs(Config.Zones) do
+		if not data.Sound then continue end
+
+		local sound = Instance.new("Sound")
+		sound.SoundId = data.Sound
+		sound.Name = tostring(zone)
+		sound.Parent = SoundService
+	end
+end
+
+local function PlaySound(part: BasePart)
+	local zoneModel = part:FindFirstAncestorWhichIsA("Model")
+	if not zoneModel then return end
+
+	local zoneData = Config.Zones[tonumber(zoneModel.Name)]
+	if not zoneData then return end
+
+	local sound = SoundService:FindFirstChild(zoneModel.Name)
+	if not sound then return end
+
+	local clone = sound:Clone()
+	clone.Parent = SoundService
+	clone:Play()
+
+	task.delay(1, game.Destroy, clone)
+end
+
+-- Tweening
+local function TweenDown(part: BasePart)
+	if ActiveTweens[part] then
+		ActiveTweens[part]:Cancel()
+	end
+
+	local zoneModel = part:FindFirstAncestorWhichIsA("Model")
+	local zoneData = Config.Zones[tonumber(zoneModel.Name)]
+	if not zoneData or not zoneData.YPosition then return end
+
+	PlaySound(part)
+
+	local tween = TweenService:Create(
+		part,
+		TweenDownInfo,
+		{Position = Vector3.new(part.Position.X, zoneData.YPosition - Config.LowerAmount, part.Position.Z)}
+	)
+
+	tween:Play()
+	ActiveTweens[part] = tween
+	LoweredParts[part] = true
+end
+
+local function TweenUp(part: BasePart)
+	if ActiveTweens[part] then
+		ActiveTweens[part]:Cancel()
+	end
+
+	local zoneModel = part:FindFirstAncestorWhichIsA("Model")
+	local zoneData = Config.Zones[tonumber(zoneModel.Name)]
+	if not zoneData or not zoneData.YPosition then return end
+
+	local tween = TweenService:Create(
+		part,
+		TweenUpInfo,
+		{Position = Vector3.new(part.Position.X, zoneData.YPosition, part.Position.Z)}
+	)
+
+	tween:Play()
+	ActiveTweens[part] = tween
+	LoweredParts[part] = nil
+end
+
+-- Detection
+local function Raycast(position: Vector3, params: RaycastParams)
+	return workspace:Raycast(position, Vector3.new(0, -4, 0), params)
+end
+
+local function GetKeysUnderCharacter()
+	local root = Character:FindFirstChild("HumanoidRootPart")
+	if not root then return {} end
+
+	local results = {}
+
+	local params = RaycastParams.new()
+	params.FilterDescendantsInstances = {Character}
+	params.FilterType = Enum.RaycastFilterType.Exclude
+
+	local offsets = {
+		Vector3.new(1.1, 0, 1.1),
+		Vector3.new(-1.1, 0, 1.1),
+		Vector3.new(1.1, 0, -1.1),
+		Vector3.new(-1.1, 0, -1.1),
+	}
+
+	local zonesFolder = workspace:FindFirstChild("Zones")
+
+	for _, offset in ipairs(offsets) do
+		local result = Raycast(root.Position + offset, params)
+
+		if result and result.Instance and result.Instance:IsDescendantOf(zonesFolder) then
+			table.insert(results, result.Instance)
+		end
+	end
+
+	return results
+end
+
+local function UpdateKeys()
+	local keys = GetKeysUnderCharacter()
+	local current = {}
+
+	for _, k in ipairs(keys) do
+		current[k] = true
+		if not LoweredParts[k] then
+			TweenDown(k)
+		end
+	end
+
+	for part in pairs(LoweredParts) do
+		if not current[part] then
+			TweenUp(part)
+		end
+	end
+end
+
+-- Setup Y positions
+local function SetupZone(zone)
+	if not zone:IsA("Folder") then return end
+
+	for _, obj in zone:GetDescendants() do
+		if obj:IsA("BasePart") then
+			Config.Zones[tonumber(zone.Name)].YPosition = obj.Position.Y
+			break
+		end
+	end
+end
+
+for _, zone in workspace.Zones:GetChildren() do
+	SetupZone(zone)
+end
+
+workspace.Zones.ChildAdded:Connect(SetupZone)
+
+CreateZoneSounds()
+RunService.Heartbeat:Connect(UpdateKeys)

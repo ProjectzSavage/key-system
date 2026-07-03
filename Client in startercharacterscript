@@ -1,64 +1,68 @@
--- Services & Modules
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
+local Players = game:GetService("Players")
+local Debris = game:GetService("Debris")
 
-local Config = require(ReplicatedStorage.Modules.Config)
+local Config = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Config"))
 
--- Variables
+local player = Players.LocalPlayer
+local playerStats = player:WaitForChild("Stats")
 local Character = script.Parent
+local keyboardSoundIdValue = playerStats:WaitForChild("KeyboardSoundId")
+
 local TweenDownInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local TweenUpInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
+local RELEASE_GRACE = 0.18
 local LoweredParts = {}
 local ActiveTweens = {}
+local OriginalCFrames = {}
+local LastSeenOnKey = {}
 
--- Sounds
-local function CreateZoneSounds()
-	for zone, data in pairs(Config.Zones) do
-		if not data.Sound then continue end
+local function getKeyboardSoundId()
+	return (keyboardSoundIdValue.Value ~= "" and keyboardSoundIdValue.Value) or Config.FallbackKeyboardSound
+end
 
-		local sound = Instance.new("Sound")
-		sound.SoundId = data.Sound
-		sound.Name = tostring(zone)
-		sound.Parent = SoundService
+local function playSoundForKey(part)
+	local sound = Instance.new("Sound")
+	sound.SoundId = getKeyboardSoundId()
+	sound.Volume = 1.15
+	sound.RollOffMode = Enum.RollOffMode.InverseTapered
+	sound.RollOffMinDistance = 6
+	sound.RollOffMaxDistance = 55
+	sound.PlaybackSpeed = math.random(95, 108) / 100
+	sound.Parent = part
+	sound:Play()
+	Debris:AddItem(sound, 1.5)
+end
+
+local function getDownCFrame(part)
+	if not OriginalCFrames[part] then
+		OriginalCFrames[part] = part.CFrame
 	end
+	return OriginalCFrames[part] * CFrame.new(0, -Config.LowerAmount, 0)
 end
 
-local function PlaySound(part: BasePart)
-	local zoneModel = part:FindFirstAncestorWhichIsA("Model")
-	if not zoneModel then return end
-
-	local zoneData = Config.Zones[tonumber(zoneModel.Name)]
-	if not zoneData then return end
-
-	local sound = SoundService:FindFirstChild(zoneModel.Name)
-	if not sound then return end
-
-	local clone = sound:Clone()
-	clone.Parent = SoundService
-	clone:Play()
-
-	task.delay(1, game.Destroy, clone)
+local function getUpCFrame(part)
+	if not OriginalCFrames[part] then
+		OriginalCFrames[part] = part.CFrame
+	end
+	return OriginalCFrames[part]
 end
 
--- Tweening
 local function TweenDown(part: BasePart)
 	if ActiveTweens[part] then
 		ActiveTweens[part]:Cancel()
 	end
 
-	local zoneModel = part:FindFirstAncestorWhichIsA("Model")
-	local zoneData = Config.Zones[tonumber(zoneModel.Name)]
-	if not zoneData or not zoneData.YPosition then return end
-
-	PlaySound(part)
+	playSoundForKey(part)
 
 	local tween = TweenService:Create(
 		part,
 		TweenDownInfo,
-		{Position = Vector3.new(part.Position.X, zoneData.YPosition - Config.LowerAmount, part.Position.Z)}
+		{ CFrame = getDownCFrame(part) }
 	)
 
 	tween:Play()
@@ -71,14 +75,10 @@ local function TweenUp(part: BasePart)
 		ActiveTweens[part]:Cancel()
 	end
 
-	local zoneModel = part:FindFirstAncestorWhichIsA("Model")
-	local zoneData = Config.Zones[tonumber(zoneModel.Name)]
-	if not zoneData or not zoneData.YPosition then return end
-
 	local tween = TweenService:Create(
 		part,
 		TweenUpInfo,
-		{Position = Vector3.new(part.Position.X, zoneData.YPosition, part.Position.Z)}
+		{ CFrame = getUpCFrame(part) }
 	)
 
 	tween:Play()
@@ -86,7 +86,6 @@ local function TweenUp(part: BasePart)
 	LoweredParts[part] = nil
 end
 
--- Detection
 local function Raycast(position: Vector3, params: RaycastParams)
 	return workspace:Raycast(position, Vector3.new(0, -4, 0), params)
 end
@@ -96,9 +95,10 @@ local function GetKeysUnderCharacter()
 	if not root then return {} end
 
 	local results = {}
+	local seen = {}
 
 	local params = RaycastParams.new()
-	params.FilterDescendantsInstances = {Character}
+	params.FilterDescendantsInstances = { Character }
 	params.FilterType = Enum.RaycastFilterType.Exclude
 
 	local offsets = {
@@ -106,15 +106,19 @@ local function GetKeysUnderCharacter()
 		Vector3.new(-1.1, 0, 1.1),
 		Vector3.new(1.1, 0, -1.1),
 		Vector3.new(-1.1, 0, -1.1),
+		Vector3.new(0, 0, 0),
 	}
 
 	local zonesFolder = workspace:FindFirstChild("Zones")
+	if not zonesFolder then return {} end
 
 	for _, offset in ipairs(offsets) do
 		local result = Raycast(root.Position + offset, params)
-
 		if result and result.Instance and result.Instance:IsDescendantOf(zonesFolder) then
-			table.insert(results, result.Instance)
+			if not seen[result.Instance] then
+				seen[result.Instance] = true
+				table.insert(results, result.Instance)
+			end
 		end
 	end
 
@@ -124,38 +128,37 @@ end
 local function UpdateKeys()
 	local keys = GetKeysUnderCharacter()
 	local current = {}
+	local now = tick()
 
 	for _, k in ipairs(keys) do
 		current[k] = true
+		LastSeenOnKey[k] = now
 		if not LoweredParts[k] then
 			TweenDown(k)
 		end
 	end
 
 	for part in pairs(LoweredParts) do
-		if not current[part] then
+		local lastSeen = LastSeenOnKey[part] or 0
+		if not current[part] and (now - lastSeen) > RELEASE_GRACE then
 			TweenUp(part)
 		end
 	end
 end
 
--- Setup Y positions
 local function SetupZone(zone)
 	if not zone:IsA("Folder") then return end
-
 	for _, obj in zone:GetDescendants() do
 		if obj:IsA("BasePart") then
-			Config.Zones[tonumber(zone.Name)].YPosition = obj.Position.Y
-			break
+			OriginalCFrames[obj] = obj.CFrame
 		end
 	end
 end
 
-for _, zone in workspace.Zones:GetChildren() do
+local zonesFolder = workspace:WaitForChild("Zones")
+for _, zone in zonesFolder:GetChildren() do
 	SetupZone(zone)
 end
 
-workspace.Zones.ChildAdded:Connect(SetupZone)
-
-CreateZoneSounds()
+zonesFolder.ChildAdded:Connect(SetupZone)
 RunService.Heartbeat:Connect(UpdateKeys)

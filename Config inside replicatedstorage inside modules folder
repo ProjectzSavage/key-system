@@ -1,30 +1,30 @@
 local Config = {}
 
-Config.Keys = {"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M","N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"}
-Config.LowerAmount = 0.8 -- In studs
+Config.Keys = {
+	"A","B","C","D","E","F","G","H","I","J","K","L","M",
+	"N","O","P","Q","R","S","T","U","V","W","X","Y","Z"
+}
+
+Config.LowerAmount = 0.8
+Config.FallbackKeyboardSound = "rbxassetid://132272653401114"
 
 Config.Zones = {
 	[1] = {
 		Colors = {
-			[1] = Color3.fromRGB(116, 130, 255),
-			[2] = Color3.fromRGB(93, 106, 204),
-			[3] = Color3.fromRGB(134, 136, 255),
-			[4] = Color3.fromRGB(108, 113, 186),
+			Color3.fromRGB(54, 141, 217),
+			Color3.fromRGB(217, 123, 203),
+			Color3.fromRGB(170, 85, 127),
+			Color3.fromRGB(207, 73, 207),
 		},
-
-		Sound = "rbxassetid://132272653401114",
 	},
-
 	[2] = {
 		Colors = {
-			[1] = Color3.fromRGB(167, 135, 116),
-			[2] = Color3.fromRGB(122, 98, 85),
-			[3] = Color3.fromRGB(179, 134, 94),
-			[4] = Color3.fromRGB(156, 116, 80),
+			Color3.fromRGB(105, 64, 40),
+			Color3.fromRGB(68, 41, 26),
+			Color3.fromRGB(139, 84, 53),
+			Color3.fromRGB(116, 70, 44),
 		},
-
-		Sound = "rbxassetid://96591611478915",
-	}
+	},
 }
 
 return Config

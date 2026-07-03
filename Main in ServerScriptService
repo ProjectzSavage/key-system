@@ -1,17 +1,17 @@
--- Services & Modules
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Config = require(ReplicatedStorage.Modules.Config)
+local Config = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Config"))
 
--- Variables
 local TotalCharacters = #Config.Keys
 local Randomizer = Random.new()
 
--- Functions
-local function CreateZone(ZoneNumber: number)
-	local zone = workspace.Zones:FindFirstChild(tostring(ZoneNumber))
+local function createZone(zoneNumber)
+	local zonesFolder = workspace:FindFirstChild("Zones")
+	if not zonesFolder then return end
+
+	local zone = zonesFolder:FindFirstChild(tostring(zoneNumber))
 	if not zone then return end
 
-	local zoneData = Config.Zones[ZoneNumber]
+	local zoneData = Config.Zones[zoneNumber]
 	if not zoneData then return end
 
 	for _, key in zone:GetDescendants() do
@@ -19,7 +19,6 @@ local function CreateZone(ZoneNumber: number)
 
 		local surfaceGui = key:FindFirstChildOfClass("SurfaceGui")
 		local textLabel = surfaceGui and surfaceGui:FindFirstChildOfClass("TextLabel")
-
 		if textLabel then
 			textLabel.Text = Config.Keys[Randomizer:NextInteger(1, TotalCharacters)]
 		end
@@ -28,7 +27,14 @@ local function CreateZone(ZoneNumber: number)
 	end
 end
 
--- Initialization
+local zonesFolder = workspace:WaitForChild("Zones")
 for i in pairs(Config.Zones) do
-	CreateZone(i)
+	createZone(i)
 end
+
+zonesFolder.ChildAdded:Connect(function(child)
+	local num = tonumber(child.Name)
+	if num then
+		createZone(num)
+	end
+end)
